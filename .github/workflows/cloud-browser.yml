@@ -9,20 +9,25 @@ jobs:
     timeout-minutes: 360
 
     steps:
+
     - name: Update system
       run: |
         sudo apt update
 
-    - name: Install desktop and VNC
+    - name: Install desktop
       run: |
         sudo apt install -y xfce4 xfce4-goodies dbus-x11
-        sudo apt install -y xvfb x11vnc novnc websockify
-        sudo apt install -y wget curl
 
-    - name: Install Chrome
+    - name: Install VNC + noVNC
       run: |
-        wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-        sudo apt install -y ./google-chrome-stable_current_amd64.deb
+        sudo apt install -y xvfb x11vnc novnc websockify wget curl
+
+    - name: Install Chrome (reliable repo method)
+      run: |
+        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google.list
+        sudo apt update
+        sudo apt install -y google-chrome-stable
 
     - name: Start virtual display
       run: |
@@ -41,7 +46,7 @@ jobs:
         export DISPLAY=:1
         x11vnc -display :1 -nopw -forever -shared -rfbport 5900 &
 
-    - name: Start noVNC (legacy compatible)
+    - name: Start noVNC
       run: |
         websockify --web=/usr/share/novnc/ 6080 localhost:5900 &
 
@@ -51,23 +56,25 @@ jobs:
         chmod +x cloudflared-linux-amd64
         sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
 
-    - name: Start tunnel
+    - name: Start Cloudflare tunnel
       run: |
-        cloudflared tunnel --url http://localhost:6080 > tunnel.txt 2>&1 &
-        sleep 20
+        cloudflared tunnel --url http://localhost:6080 > tunnel.log 2>&1 &
+        sleep 25
 
-    - name: Print public URL
+    - name: Print cloud PC link
       run: |
-        grep trycloudflare tunnel.txt
+        grep trycloudflare tunnel.log
 
-    - name: Launch Chrome
+    - name: Launch Chrome optimized for streaming
       run: |
         export DISPLAY=:1
         google-chrome \
         --no-sandbox \
         --disable-dev-shm-usage \
         --autoplay-policy=no-user-gesture-required \
-        --start-maximized &
+        --start-maximized \
+        --enable-accelerated-video-decode \
+        --enable-gpu-rasterization &
 
     - name: Keep runner alive
       run: |
